@@ -9,4 +9,3 @@ crate-type = ["cdylib"]
 
 [dependencies]
 md5 = "0.7.0"
-

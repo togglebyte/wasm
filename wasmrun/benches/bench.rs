@@ -50,3 +50,26 @@ fn c2(b: &mut Bencher) {
         });
     }
 }
+
+#[bench]
+fn lua(b: &mut Bencher) {
+    let mut lua = rlua::Lua::new();
+
+    let lua_code = r#"
+    s = string.format("%d %d", one, two)
+    res = one + two
+        "#;
+
+    let one = 2;
+    let two = 5;
+
+    let val = lua.context(|ctx| {
+        b.iter(|| {
+            ctx.globals().set("one", one);
+            ctx.globals().set("two", two);
+            ctx.load(lua_code).exec();
+            let val: i32 = ctx.globals().get("res").unwrap();
+            assert_eq!(val, 7);
+        });
+    });
+}

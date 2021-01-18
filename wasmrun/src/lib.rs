@@ -9,6 +9,7 @@ use wasmer_runtime::{
     Func as WasmerFunc,
 };
 use libloading::Library;
+use rlua::prelude::*;
 
 // -----------------------------------------------------------------------------
 //     - Libloading -
@@ -65,12 +66,38 @@ pub fn add_wasmtime(inst: &Instance) -> impl Fn(i32, i32) -> Result<i32, Trap> {
 // -----------------------------------------------------------------------------
 pub fn inst_wasmer() -> WasmerInstance {
     static WASM: &[u8] = include_bytes!("../../wasmlib/target/wasm32-unknown-unknown/release/wasmlib.wasm");
-    let instance = instantiate(WASM, &imports![]).unwrap();
-    instance
+    instantiate(WASM, &imports![]).unwrap()
 }
 
 pub fn add_wasmer(inst: &WasmerInstance) -> WasmerFunc<(i32, i32), i32> {
-    let f = inst.func::<(i32, i32), i32>("add").unwrap();
-    f
+    inst.func::<(i32, i32), i32>("add").unwrap()
 }
 
+
+// -----------------------------------------------------------------------------
+//     - Lua -
+// -----------------------------------------------------------------------------
+pub fn lua() {
+    let lua_code = r#"
+        s = string.format("%d %d", one, two)
+        res = one + two
+    "#;
+
+    let mut lua = rlua::Lua::new();
+}
+
+pub fn lualib(one: i32, two: i32) -> i32 {
+    let lua_code = r#"
+        s = string.format("%d %d", one, two)
+        res = one + two
+    "#;
+
+    let mut lua = rlua::Lua::new();
+    lua.context(|ctx| {
+        ctx.globals().set("one", one);
+        ctx.globals().set("two", two);
+        ctx.load(lua_code).exec();
+        let res: i32 = ctx.globals().get("res").unwrap();
+        res
+    })
+}
