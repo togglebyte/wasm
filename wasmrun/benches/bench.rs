@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate test;
-use test::bench::{black_box, Bencher};
+use test::bench::Bencher;
 use wasmrun::*;
 
 #[bench]
@@ -53,23 +53,17 @@ fn c2(b: &mut Bencher) {
 
 #[bench]
 fn lua(b: &mut Bencher) {
-    let mut lua = rlua::Lua::new();
-
-    let lua_code = r#"
-    s = string.format("%d %d", one, two)
-    res = one + two
-        "#;
+    let lua = luaload();
 
     let one = 2;
     let two = 5;
 
-    let val = lua.context(|ctx| {
-        b.iter(|| {
-            ctx.globals().set("one", one);
-            ctx.globals().set("two", two);
-            ctx.load(lua_code).exec();
-            let val: i32 = ctx.globals().get("res").unwrap();
-            assert_eq!(val, 7);
+    b.iter(|| {
+        let val = lua.context(|ctx| {
+            let globals = ctx.globals();
+            let add: rlua::Function = globals.get("add").unwrap();
+            add.call::<_, i32>((one, two)).unwrap()
         });
+        assert_eq!(val, 7);
     });
 }
