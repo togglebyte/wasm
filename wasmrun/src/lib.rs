@@ -1,7 +1,6 @@
 use std::ffi::CStr;
 
 use wasmtime::*;
-use wasmtime_wasi::{Wasi, WasiCtx};
 use wasmer_runtime::{
     imports,
     instantiate,
@@ -9,7 +8,7 @@ use wasmer_runtime::{
     Func as WasmerFunc,
 };
 use libloading::Library;
-use rlua::prelude::*;
+use rlua::{Function, Lua};
 
 // -----------------------------------------------------------------------------
 //     - Libloading -
@@ -32,12 +31,12 @@ pub unsafe fn dlopen() -> *mut libc::c_void {
     let s = CStr::from_bytes_with_nul(b"../wasmlib/target/release/libwasmlib.so\0").unwrap();
     let fn_name = CStr::from_bytes_with_nul(b"add\0").unwrap();
 
-    let mut lib = libc::dlopen(s.as_ptr(), libc::RTLD_NOW);
-    let mut func = libc::dlsym(lib, fn_name.as_ptr());
+    let lib = libc::dlopen(s.as_ptr(), libc::RTLD_NOW);
+    let func = libc::dlsym(lib, fn_name.as_ptr());
     func
 }
 
-pub unsafe fn c_add(mut func: *mut fn(i32, i32) -> i32) -> i32 {
+pub unsafe fn c_add(func: *mut fn(i32, i32) -> i32) -> i32 {
     let val = (*func)(2, 5);
     val
 }
@@ -47,7 +46,7 @@ pub unsafe fn c_add(mut func: *mut fn(i32, i32) -> i32) -> i32 {
 // -----------------------------------------------------------------------------
 pub fn inst_wasmtime() -> Instance {
     let store = Store::default();
-    let mut linker = Linker::new(&store);
+    // let linker = Linker::new(&store);
     let module = Module::from_file(
         store.engine(),
         "../wasmlib/target/wasm32-unknown-unknown/release/wasmlib.wasm",
@@ -70,34 +69,33 @@ pub fn inst_wasmer() -> WasmerInstance {
 }
 
 pub fn add_wasmer(inst: &WasmerInstance) -> WasmerFunc<(i32, i32), i32> {
-    inst.func::<(i32, i32), i32>("add").unwrap()
+    inst.exports.get("add").unwrap()
 }
 
 
 // -----------------------------------------------------------------------------
 //     - Lua -
 // -----------------------------------------------------------------------------
-pub fn lua() {
+pub fn luaload() -> Lua {
     let lua_code = r#"
-        s = string.format("%d %d", one, two)
-        res = one + two
+        function add(a, b)
+            return a + b
+        end
     "#;
 
-    let mut lua = rlua::Lua::new();
+    let lua = Lua::new();
+
+    lua.context(|ctx| {
+        ctx.load(lua_code).exec().unwrap();
+    });
+
+    lua
 }
 
-pub fn lualib(one: i32, two: i32) -> i32 {
-    let lua_code = r#"
-        s = string.format("%d %d", one, two)
-        res = one + two
-    "#;
-
-    let mut lua = rlua::Lua::new();
+pub fn lualib(lua: &rlua::Lua, one: i32, two: i32) -> i32 {
     lua.context(|ctx| {
-        ctx.globals().set("one", one);
-        ctx.globals().set("two", two);
-        ctx.load(lua_code).exec();
-        let res: i32 = ctx.globals().get("res").unwrap();
-        res
+        let globals = ctx.globals();
+        let add: Function = globals.get("add").unwrap();
+        add.call::<_, _>((one, two)).unwrap()
     })
 }
